@@ -1,0 +1,9 @@
+Added Component: Designator=U?(ESP32-DEVKIT-V1.0-38PIN)
+Added Pin To Net: NetName=Relay Pin=U?-7
+Added Pin To Net: NetName=Servo Pin=U?-8
+Added Pin To Net: NetName=Rain Pin=U?-10
+Added Pin To Net: NetName=GND Pin=U?-14
+Added Pin To Net: NetName=+5 Pin=U?-19
+Added Pin To Net: NetName=GND Pin=U?-32
+Added Pin To Net: NetName=GND Pin=U?-38
+Added Member To Class: ClassName=Sheet1 Member=Component U? ESP32-DEVKI-V1.0-PIN38
