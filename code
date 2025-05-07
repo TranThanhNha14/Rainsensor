@@ -1,0 +1,177 @@
+#define BLYNK_TEMPLATE_ID "TMPL6zd4CUO21"
+#define BLYNK_TEMPLATE_NAME "esp32"
+#define BLYNK_AUTH_TOKEN "QWdRZVfE0f2DKaUqf4qLLRHeyvBNeUYb"
+
+#define BLYNK_PRINT Serial
+#include <WiFi.h>
+#include <WiFiClient.h>
+#include <BlynkSimpleEsp32.h>
+#include <Arduino.h>
+
+// WiFi
+char ssid[] = "Chocomeo";
+char pass[] = "11111111";
+ 
+ 
+
+// LED & Button
+const int btn[4] = {13, 12, 14, 27};
+const int out[4] = {26, 24, 33, 32};
+unsigned long timeDelay = millis();
+unsigned long timeUpdata = millis();
+bool update = 0;
+
+// L298N
+#define IN1 2
+#define IN2 4
+#define ENA 16
+#define SWITCH_LEFT 17
+#define SWITCH_RIGHT 5 
+#define RAIN_SENSOR 25
+
+const int pwmChannel = 0;
+const int pwmFreq = 1000;
+const int pwmResolution = 8;
+
+unsigned long motorStartTime = 0;
+bool motorRunning = false;
+int motorDirection = 0;
+
+bool lastLeftPressed = false;
+bool lastRightPressed = false;
+bool lastRainPressed = false;
+
+ICACHE_RAM_ATTR void handleBtn() {
+  if (millis() - timeDelay > 500) {
+    for (int i = 0; i < 4; i++) {
+      bool btnState = digitalRead(btn[i]);
+      if (btnState == 0) {
+        digitalWrite(out[i], !digitalRead(out[i]));
+      }
+    }
+    update = 1;
+    timeDelay = millis();
+  }
+}
+
+// BLYNK control LED
+BLYNK_CONNECTED() {
+  Blynk.syncAll();
+}
+BLYNK_WRITE(V1) { digitalWrite(out[0], param.asInt()); }
+BLYNK_WRITE(V2) { digitalWrite(out[1], param.asInt()); }
+BLYNK_WRITE(V3) { digitalWrite(out[2], param.asInt()); }
+BLYNK_WRITE(V4) { digitalWrite(out[3], param.asInt()); }
+
+// BLYNK control motor
+BLYNK_WRITE(V5) {
+  if (!motorRunning) {
+    digitalWrite(IN1, HIGH);
+    digitalWrite(IN2, LOW);
+    motorDirection = 1;
+    motorRunning = true;
+    motorStartTime = millis();
+    ledcWrite(pwmChannel, 120);
+  }
+}
+BLYNK_WRITE(V6) {
+  if (!motorRunning) {
+    digitalWrite(IN1, LOW);
+    digitalWrite(IN2, HIGH);
+    motorDirection = -1;
+    motorRunning = true;
+    motorStartTime = millis();
+    ledcWrite(pwmChannel, 120);
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+
+  // LED & Button
+  for (int i = 0; i < 4; i++) {
+    pinMode(btn[i], INPUT_PULLUP);
+    attachInterrupt(btn[i], handleBtn, FALLING);
+    pinMode(out[i], OUTPUT);
+  }
+
+  // Motor
+  pinMode(IN1, OUTPUT);
+  pinMode(IN2, OUTPUT);
+  pinMode(SWITCH_LEFT, INPUT_PULLUP);
+  pinMode(SWITCH_RIGHT, INPUT_PULLUP);
+  pinMode(RAIN_SENSOR, INPUT_PULLUP);
+
+  ledcSetup(pwmChannel, pwmFreq, pwmResolution);
+  ledcAttachPin(ENA, pwmChannel);
+  ledcWrite(pwmChannel, 0);
+
+  // Blynk
+  Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
+}
+
+void loop() {
+  Blynk.run();
+
+  // Update LED status
+  if (millis() - timeUpdata > 1000) {
+    Blynk.virtualWrite(V0, millis() / 1000);
+    timeUpdata = millis();
+  }
+  if (update) {
+    Blynk.virtualWrite(V1, digitalRead(out[0]));
+    Blynk.virtualWrite(V2, digitalRead(out[1]));
+    Blynk.virtualWrite(V3, digitalRead(out[2]));
+    Blynk.virtualWrite(V4, digitalRead(out[3]));
+    update = 0;
+  }
+
+  // Motor control by button
+  bool rainPressed = digitalRead(RAIN_SENSOR) == LOW;
+bool leftPressed = digitalRead(SWITCH_LEFT) == LOW;
+  bool rightPressed = digitalRead(SWITCH_RIGHT) == LOW;
+
+  bool newRainPress = rainPressed && !lastRainPressed;
+  bool newLeftPress = leftPressed && !lastLeftPressed;
+  bool newRightPress = rightPressed && !lastRightPressed;
+
+  if (!motorRunning) {
+    if (newRainPress && !leftPressed && !rightPressed) {
+      digitalWrite(IN1, HIGH);
+      digitalWrite(IN2, LOW);
+      motorDirection = 1;
+      motorRunning = true;
+      motorStartTime = millis();
+      ledcWrite(pwmChannel, 120);
+    } else if (!leftPressed && newRightPress) {
+      digitalWrite(IN1, HIGH);
+      digitalWrite(IN2, LOW);
+      motorDirection = 1;
+      motorRunning = true;
+      motorStartTime = millis();
+      ledcWrite(pwmChannel, 120);
+    } else if (newLeftPress && !rightPressed) {
+      digitalWrite(IN1, LOW);
+      digitalWrite(IN2, HIGH);
+      motorDirection = -1;
+      motorRunning = true;
+      motorStartTime = millis();
+      ledcWrite(pwmChannel, 120);
+    }
+  }
+
+  // Stop motor after s
+  if (motorRunning && millis() - motorStartTime >= 1000) {
+    digitalWrite(IN1, LOW);
+    digitalWrite(IN2, LOW);
+    ledcWrite(pwmChannel, 0);
+    motorRunning = false;
+    motorDirection = 0;
+  }
+
+  lastLeftPressed = leftPressed;
+  lastRightPressed = rightPressed;
+  lastRainPressed = rainPressed;
+
+  delay(10);
+}
